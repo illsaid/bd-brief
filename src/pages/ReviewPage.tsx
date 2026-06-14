@@ -482,7 +482,7 @@ export default function ReviewPage() {
                       </Field>
                     </div>
                     <Field label="Signal Type">
-                      <SelectInput value={sig.signal_type ?? ''} onChange={v => updateSignal(idx, 'signal_type', v)} options={['deal_announced','partnership','licensing','acquisition','collaboration','clinical_data','regulatory','financing','management','competitive','strategic_review','other']} />
+                      <SelectInput value={sig.signal_type ?? ''} onChange={v => updateSignal(idx, 'signal_type', v)} options={['M&A','FDA approval','clinical data','regulatory','financing','appeal','partnership','deal structure','market signal','other']} />
                     </Field>
                     <Field label="Strategic Category">
                       <SelectInput value={sig.strategic_category ?? ''} onChange={v => updateSignal(idx, 'strategic_category', v)} options={['comp_reset','leverage_reset','pricing_implication','screening_change','precedent','watchlist','mispricing','other']} />

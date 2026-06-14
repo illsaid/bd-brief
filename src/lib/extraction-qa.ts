@@ -17,6 +17,31 @@ const VALID_URGENCIES = ['immediate', 'high', 'medium', 'low'];
 const VALID_CONFIDENCES = ['high', 'medium', 'low', 'speculative'];
 const VALID_STRATEGIC_CATEGORIES = ['comp_reset', 'leverage_reset', 'pricing_implication', 'screening_change', 'precedent', 'watchlist', 'mispricing', 'other'];
 const VALID_BD_POSTURES = ['offensive', 'defensive', 'intelligence', 'neutral'];
+const VALID_SIGNAL_TYPES = ['M&A', 'FDA approval', 'clinical data', 'regulatory', 'financing', 'appeal', 'partnership', 'deal structure', 'market signal', 'other'];
+const SIGNAL_TYPE_SYNONYMS: Record<string, string> = {
+  'acquisition': 'M&A',
+  'm&a': 'M&A',
+  'merger': 'M&A',
+  'merger & acquisition': 'M&A',
+  'takeover': 'M&A',
+  'buyout': 'M&A',
+  'licensing': 'partnership',
+  'license': 'partnership',
+  'collaboration': 'partnership',
+  'deal_announced': 'deal structure',
+  'deal announced': 'deal structure',
+  'deal_structure': 'deal structure',
+  'clinical_data': 'clinical data',
+  'clinical': 'clinical data',
+  'data readout': 'clinical data',
+  'fda_approval': 'FDA approval',
+  'approval': 'FDA approval',
+  'regulatory_action': 'regulatory',
+  'management': 'other',
+  'competitive': 'market signal',
+  'strategic_review': 'other',
+  'strategic review': 'other',
+};
 const UNCERTAINTY_WORDS = /\b(depends|possibly|potentially|unclear|uncertain|perhaps|unconfirmed|rumored)\b/i;
 
 const FIXTURE_COUNTS: Record<string, Record<string, { label: string; expected: number }>> = {
@@ -404,6 +429,13 @@ export function computeQaWarnings(data: ExtractionJson, mode: QaMode = 'producti
         severity: 'warning', badge: 'needs_review',
       });
     }
+    if (sig.signal_type && !VALID_SIGNAL_TYPES.includes(sig.signal_type)) {
+      warnings.push({
+        section: 'bd_signals', index: i, field: 'signal_type',
+        message: `Signal "${sig.headline}" has signal_type "${sig.signal_type}" outside the import contract (allowed: ${VALID_SIGNAL_TYPES.join(', ')})`,
+        severity: 'blocking', badge: 'needs_review',
+      });
+    }
     for (const confField of ['fact_confidence', 'implication_confidence', 'extraction_confidence'] as const) {
       const val = sig[confField];
       if (val && !VALID_CONFIDENCES.includes(val)) {
@@ -532,6 +564,7 @@ export function computeSignalBadge(sig: ExtractionSignal): QaBadge {
   if (sig.urgency && !VALID_URGENCIES.includes(sig.urgency)) return 'needs_review';
   if (sig.strategic_category && !VALID_STRATEGIC_CATEGORIES.includes(sig.strategic_category)) return 'needs_review';
   if (sig.bd_posture && !VALID_BD_POSTURES.includes(sig.bd_posture)) return 'needs_review';
+  if (sig.signal_type && !VALID_SIGNAL_TYPES.includes(sig.signal_type)) return 'needs_review';
 
   return 'clean';
 }
@@ -645,6 +678,11 @@ export function normalizeExtraction(data: ExtractionJson): ExtractionJson {
         } else {
           updated.strategic_category = 'other';
         }
+      }
+      const rawType = updated.signal_type;
+      if (rawType && !VALID_SIGNAL_TYPES.includes(rawType)) {
+        const mapped = SIGNAL_TYPE_SYNONYMS[rawType.toLowerCase().trim()];
+        updated.signal_type = mapped ?? 'other';
       }
       return updated;
     });

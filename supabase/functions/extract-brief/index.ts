@@ -36,6 +36,8 @@ const PROMPT_METADATA = `You extract issue metadata and board summary from a bio
 
 ${SHARED_RULES}
 
+- Do NOT invent issue_number, issue_date, title, or source. If a field is not explicitly stated in the text, return "".
+
 Return this exact shape:
 {
   "issue_metadata": {
@@ -58,9 +60,14 @@ ${SHARED_RULES}
 SECTION HIERARCHY -- FOLLOW STRICTLY:
 - Items under "TOP 3 ITEMS" or "TOP 3" or "FULL ANALYSIS" headings = HIGH priority bd_signals. Extract ALL of them.
 - Items under "SECOND TIER" or "SECOND-TIER" headings = MEDIUM priority bd_signals. Extract ALL of them.
-- Items under "WATCH LIST" or "WATCHLIST" or "MONITORING" headings = DO NOT extract as bd_signals. These are watchlist-only items and must be excluded from bd_signals output.
-- If an item is labeled "reviewed, not elevated" or similar, do NOT include it.
+- Items under "WATCH LIST" or "WATCHLIST" or "MONITORING" headings = extract them as bd_signals BUT set strategic_category="watchlist" and priority="low". Do NOT elevate them to high/medium priority and do NOT treat them as Top 3 / Second Tier items. They must be preserved (not dropped) so they can be imported as watchlist rows.
+- An item labeled "reviewed, not elevated" is a watchlist item: include it with strategic_category="watchlist" and priority="low". Never give it high/medium priority.
 - When in doubt about priority: if an item has its own full analysis section with subsections (what_changed, bd_interpretation, etc.), treat it as high priority.
+
+DO NOT INVENT FIELDS:
+- Only populate a field if it is EXPLICITLY stated in the source. If owner, deadline, issue number, modality, stage, event_date, or therapeutic area are not explicitly stated, return null/empty for that field.
+- Exceptions: _normalized fields and inference_chain/bd_interpretation/recommended_action may be derived. Never fabricate a factual field (event_date, modality_raw, therapeutic_area_raw, stage) that is not in the text.
+- Preserve economics figures EXACTLY as written, including qualifiers and approximation marks. Do NOT round, merge, or "clean up" dollar figures. Example: if the source says milestones "up to ~$1.03B" and a broader/total marker "up-to-$1.14B", keep both distinct values verbatim; never collapse them into one number.
 
 CRITICAL RULES FOR COMPANIES:
 - Only include companies that are EXPLICITLY NAMED in the source text chunk you are given.
@@ -75,6 +82,7 @@ SOURCE CHUNK TEXT RULES:
 - sources array: extract bracket citations like [FDA], [BMS], [Pfizer], [AbbVie] as source entries. These indicate the data source for that item.
 
 Additional rules for signals:
+- signal_type MUST be exactly one of: M&A, FDA approval, clinical data, regulatory, financing, appeal, partnership, deal structure, market signal, other. Use these exact strings (correct spacing/casing). NEVER output "acquisition" (use "M&A"), "licensing" (use "partnership" or "deal structure"), or "clinical_data" (use "clinical data"). If none fit, use "other".
 - Do not extract deal-structure-watch, outreach-target, precedent-table, or mispricing-flag items unless they are explicitly written as BD signals.
 - For _raw and _normalized variants: _raw = exact text from document, _normalized = standardized form or empty.
 - modality_raw: only the exact modality text from the source. modality_normalized: only if clearly supported by document text.
@@ -86,7 +94,7 @@ Return this exact shape:
   "bd_signals": [
     {
       "headline": "",
-      "signal_type": "deal_announced | partnership | licensing | acquisition | collaboration | clinical_data | regulatory | financing | management | competitive | strategic_review | other",
+      "signal_type": "M&A | FDA approval | clinical data | regulatory | financing | appeal | partnership | deal structure | market signal | other",
       "strategic_category": "comp_reset | leverage_reset | pricing_implication | screening_change | precedent | watchlist | mispricing | other",
       "bd_posture": "offensive | defensive | intelligence | neutral",
       "priority": "high | medium | low",
@@ -138,6 +146,8 @@ const PROMPT_RECOMMENDED_ACTIONS = `You extract recommended internal actions fro
 
 ${SHARED_RULES}
 
+- "rationale" may be derived from the brief's analysis. But "owner" and "deadline" are factual fields: only populate them if the source EXPLICITLY names an owner or a deadline. Otherwise return "" -- never generate or guess an owner or deadline.
+
 Return this exact shape:
 {
   "recommended_internal_actions": [
@@ -183,6 +193,9 @@ const PROMPT_PRECEDENT_COMPS = `You extract precedent comps from a biotech BD br
 ${SHARED_RULES}
 
 Extract only precedent-table / active-comp items explicitly present in the text.
+
+- Preserve deal economics EXACTLY as written in deal_value and key_terms, including approximation marks (~), "up to" qualifiers, and distinct milestone vs. total figures. Do NOT round or merge values. Example: keep milestones "up to ~$1.03B" separate from a broader total "up-to-$1.14B".
+- Do NOT invent deal_value, stage_at_deal, modality, therapeutic_area, or deal_date. If not explicitly stated, return "".
 
 Return this exact shape:
 {
@@ -470,21 +483,26 @@ function sectionizeBrief(fullText: string): { chunks: SectionChunks; detected: S
       }
     }
 
-    // For bd_signals: extend chunk to include SECOND TIER content (same logical section)
+    // For bd_signals: extend chunk to include SECOND TIER and WATCH LIST content.
+    // Watchlist items are now extracted as bd_signals (classified as watchlist), so the
+    // chunk must reach through the watch-list section, ending at the first genuine
+    // non-signal section (leverage resets, deal structure, comps, mispricing, actions).
     if (detected.has("bd_signals")) {
+      const bdStart = positions.find(p => p.key === "bd_signals")?.start ?? 0;
       const secondTierMatch = fullText.match(/(?:^|\n)#{1,3}\s*(?:second[\s-]*tier|additional\s*signals?)/i);
-      if (secondTierMatch && secondTierMatch.index !== undefined) {
-        const bdStart = positions.find(p => p.key === "bd_signals")?.start ?? 0;
-        const stStart = secondTierMatch.index;
-        // Find the next non-signal section after second tier
-        const nonSignalSections = positions
-          .filter(p => p.key !== "bd_signals" && p.key !== "metadata" && p.start > stStart);
-        const stEnd = nonSignalSections.length > 0 ? nonSignalSections[0].start : fullText.length;
-        // Also include any WATCH LIST marker so the model can see it and know NOT to extract those
-        const watchListMatch = fullText.match(/(?:^|\n)#{1,3}\s*(?:watch\s*list|watchlist|monitoring)/i);
-        const effectiveEnd = watchListMatch && watchListMatch.index !== undefined && watchListMatch.index < stEnd
-          ? stEnd : stEnd;
-        const extendedChunk = fullText.slice(Math.min(bdStart, stStart), effectiveEnd);
+      const watchListMatch = fullText.match(/(?:^|\n)#{1,3}\s*(?:watch\s*list|watchlist|monitoring)/i);
+
+      const extensionMarkers = [secondTierMatch?.index, watchListMatch?.index]
+        .filter((idx): idx is number => idx !== undefined);
+
+      if (extensionMarkers.length > 0) {
+        const lastMarker = Math.max(...extensionMarkers);
+        // End at the first non-signal detected section that starts after the last marker.
+        const nonSignalAfter = positions
+          .filter(p => p.key !== "bd_signals" && p.key !== "metadata" && p.start > lastMarker)
+          .sort((a, b) => a.start - b.start);
+        const end = nonSignalAfter.length > 0 ? nonSignalAfter[0].start : fullText.length;
+        const extendedChunk = fullText.slice(Math.min(bdStart, ...extensionMarkers), end);
         if (extendedChunk.length > chunks.bd_signals.length) {
           chunks.bd_signals = extendedChunk;
         }
@@ -621,6 +639,49 @@ function validateMergedExtraction(data: Record<string, unknown>): string[] {
 }
 
 // --- Post-Processing ---
+
+// Controlled vocabulary for signal_type (import contract). Any output value must be one of these.
+const VALID_SIGNAL_TYPES = [
+  "M&A", "FDA approval", "clinical data", "regulatory", "financing",
+  "appeal", "partnership", "deal structure", "market signal", "other",
+];
+
+// Maps common LLM synonyms / legacy values to the controlled vocabulary.
+const SIGNAL_TYPE_SYNONYMS: Record<string, string> = {
+  "acquisition": "M&A",
+  "m&a": "M&A",
+  "merger": "M&A",
+  "merger & acquisition": "M&A",
+  "takeover": "M&A",
+  "buyout": "M&A",
+  "licensing": "partnership",
+  "license": "partnership",
+  "collaboration": "partnership",
+  "deal_announced": "deal structure",
+  "deal announced": "deal structure",
+  "deal_structure": "deal structure",
+  "clinical_data": "clinical data",
+  "clinical": "clinical data",
+  "data readout": "clinical data",
+  "fda_approval": "FDA approval",
+  "approval": "FDA approval",
+  "regulatory_action": "regulatory",
+  "management": "other",
+  "competitive": "market signal",
+  "strategic_review": "other",
+  "strategic review": "other",
+};
+
+// Normalizes a raw signal_type to the controlled vocabulary, or null if it cannot be mapped.
+function normalizeSignalType(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const exact = VALID_SIGNAL_TYPES.find(v => v.toLowerCase() === trimmed.toLowerCase());
+  if (exact) return exact;
+  const mapped = SIGNAL_TYPE_SYNONYMS[trimmed.toLowerCase()];
+  if (mapped) return mapped;
+  return null;
+}
 
 type QaSeverity = "blocking" | "warning" | "info";
 
@@ -885,6 +946,43 @@ function postProcessExtraction(raw: Record<string, unknown>, fullText: string): 
           message: `Invalid strategic_category "${rawStratCat}" normalized to "other"`,
           severity: "info",
         });
+      }
+
+      // --- Normalize + validate signal_type against the controlled contract enum ---
+      const rawSignalType = String(sig.signal_type ?? "").trim();
+      if (rawSignalType) {
+        const normalizedType = normalizeSignalType(rawSignalType);
+        if (normalizedType) {
+          if (normalizedType !== rawSignalType) {
+            warnings.push({
+              section: "bd_signals", index: i, field: "signal_type",
+              message: `signal_type "${rawSignalType}" normalized to contract value "${normalizedType}"`,
+              severity: "info",
+            });
+          }
+          sig.signal_type = normalizedType;
+        } else {
+          // Out-of-contract value that cannot be mapped: reject (blocking) per import contract.
+          warnings.push({
+            section: "bd_signals", index: i, field: "signal_type",
+            message: `signal_type "${rawSignalType}" is not in the allowed contract enum (${VALID_SIGNAL_TYPES.join(", ")})`,
+            severity: "blocking",
+          });
+          sig.signal_type = "other";
+        }
+      }
+
+      // --- Watchlist items: preserve but never elevated ---
+      if (String(sig.strategic_category ?? "").toLowerCase() === "watchlist") {
+        const pri = String(sig.priority ?? "").toLowerCase();
+        if (pri === "high" || pri === "medium") {
+          warnings.push({
+            section: "bd_signals", index: i, field: "priority",
+            message: `Watchlist signal "${sig.headline}" had priority "${pri}"; demoted to "low" (watchlist items are not elevated)`,
+            severity: "info",
+          });
+          sig.priority = "low";
+        }
       }
 
       // --- Mispricing dedup ---
