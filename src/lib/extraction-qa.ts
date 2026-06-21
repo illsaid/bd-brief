@@ -74,6 +74,7 @@ const FIXTURE_COUNTS: Record<string, Record<string, { label: string; expected: n
     mispricing_flags: { label: 'Mispricing flags', expected: 1 },
     recommended_internal_actions: { label: 'Recommended internal actions', expected: 3 },
     deal_structure_watch: { label: 'Deal structure watch', expected: 1 },
+    leverage_resets: { label: 'Leverage resets', expected: 2 },
   },
 };
 

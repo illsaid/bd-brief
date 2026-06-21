@@ -69,6 +69,7 @@ SECTION HIERARCHY -- FOLLOW STRICTLY:
     * Do NOT assign high fact_confidence unless the source text clearly supports it; otherwise leave fact_confidence empty or "low".
   Never elevate them to high/medium priority and never treat them as Top 3 / Second Tier items. They must be preserved (not dropped) so they import as watchlist rows.
 - WATCH LIST CONTAINMENT: a watchlist item is for visibility only. Do NOT also emit it as a precedent_comp, recommended_internal_action, deal_structure_watch record, outreach_target, or mispricing_flag UNLESS that same item is independently and explicitly listed under that other section's heading. Example: "Takeda zasocitinib head-to-head psoriasis data" appearing only under WATCH LIST stays a low-priority watchlist bd_signal only -- it must not become a precedent comp, recommended action, or outreach target.
+- WATCH LIST ENTITY PRESERVATION: even though a watchlist item is contained, you MUST still extract explicitly named entities from its title/body. Companies named in the item go in company_names_raw/companies_normalized; named drugs/assets go in assets; regulators go in regulators ONLY if explicitly stated. Do NOT move explicitly named companies/assets into tags only. Examples: "Takeda zasocitinib head-to-head psoriasis data" -> companies: ["Takeda"], assets: ["zasocitinib"], strategic_category: "watchlist", priority: "low", sources: empty if none given. "Moderna flu vaccine AdCom" -> companies: ["Moderna"], assets: ["flu vaccine"] (only if a descriptive program name is acceptable, else empty), regulators: ["FDA"] only if explicitly stated, strategic_category: "watchlist", priority: "low".
 - A watchlist item with no explicit source citation: leave sources empty. Do not fabricate a source.
 - When in doubt about priority: if an item has its own full analysis section with subsections (what_changed, bd_interpretation, etc.), treat it as high priority.
 
@@ -139,6 +140,10 @@ Return this exact shape:
 const PROMPT_LEVERAGE_RESETS = `You extract leverage resets from a biotech BD brief.
 
 ${SHARED_RULES}
+
+- ONLY create leverage_resets from explicit source sections labeled "Comp / Leverage Reset", "Leverage Reset", or "Slide 2 -- Comp / Leverage Reset".
+- Do NOT create leverage reset records from Top BD signals, Second Tier signals, Watch List signals, Deal Structure Watch, Board Summary, or Recommended Internal Actions.
+- Create exactly one record per explicit leverage reset bullet in that section. If the section has 2 bullets, return exactly 2 records.
 
 Return this exact shape:
 {
