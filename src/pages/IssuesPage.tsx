@@ -5,9 +5,11 @@ import { PageHeader } from '../components/Layout';
 import { Badge, statusVariant } from '../components/Badge';
 import EmptyState from '../components/EmptyState';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import { Issue } from '../lib/types';
 
 export default function IssuesPage() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,8 +52,8 @@ export default function IssuesPage() {
                 className="bg-slate-800 border border-slate-700 rounded-lg pl-8 pr-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-sky-600 w-44"
               />
             </div>
-            <button onClick={() => navigate('/upload')} className="flex items-center gap-2 px-3.5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg transition-colors">
-              <Upload size={13} /> Upload
+            <button onClick={() => navigate(user ? '/upload' : '/login')} className="flex items-center gap-2 px-3.5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg transition-colors">
+              <Upload size={13} /> {user ? 'Upload' : 'Sign in'}
             </button>
           </div>
         }
@@ -72,7 +74,7 @@ export default function IssuesPage() {
                 <th className="px-3 py-3 text-left font-medium">Date</th>
                 <th className="px-3 py-3 text-left font-medium">Status</th>
                 <th className="px-3 py-3 text-left font-medium">Created</th>
-                <th className="px-3 py-3"></th>
+                {user && <th className="px-3 py-3"></th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/50">
@@ -94,14 +96,16 @@ export default function IssuesPage() {
                     <div className="flex items-center gap-1"><Clock size={11} />{new Date(issue.created_at).toLocaleDateString()}</div>
                   </td>
                   <td className="px-3 py-3">
-                    <button
-                      onClick={e => handleDelete(e, issue.id)}
-                      disabled={deletingId === issue.id}
-                      className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-900/20 rounded transition-colors disabled:opacity-40"
-                      title="Delete issue"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    {user && (
+                      <button
+                        onClick={e => handleDelete(e, issue.id)}
+                        disabled={deletingId === issue.id}
+                        className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-900/20 rounded transition-colors disabled:opacity-40"
+                        title="Delete issue"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

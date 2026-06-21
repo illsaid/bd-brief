@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, Zap, FileText, AlertCircle, TrendingUp, Clock } from 'lucide-react';
+import { Upload, Zap, FileText, AlertCircle, TrendingUp, Clock, LogIn } from 'lucide-react';
 import { PageHeader } from '../components/Layout';
 import { Badge, priorityVariant, confidenceVariant, statusVariant } from '../components/Badge';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import { Issue, BdSignal } from '../lib/types';
 
 interface Stats {
@@ -20,6 +21,7 @@ interface CountGroup {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [stats, setStats] = useState<Stats>({ totalIssues: 0, totalSignals: 0, needsReview: 0, thisWeek: 0 });
   const [recentIssues, setRecentIssues] = useState<Issue[]>([]);
   const [recentSignals, setRecentSignals] = useState<BdSignal[]>([]);
@@ -81,10 +83,10 @@ export default function DashboardPage() {
         subtitle="BD intelligence overview"
         actions={
           <button
-            onClick={() => navigate('/upload')}
+            onClick={() => navigate(user ? '/upload' : '/login')}
             className="flex items-center gap-2 px-3.5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg transition-colors"
           >
-            <Upload size={14} /> Upload Brief
+            {user ? <><Upload size={14} /> Upload Brief</> : <><LogIn size={14} /> Sign in</>}
           </button>
         }
       />

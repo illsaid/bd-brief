@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, AlertCircle, Zap, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { Badge, priorityVariant, urgencyVariant, confidenceVariant, statusVariant } from '../components/Badge';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import { Issue, BdSignal, LeverageReset, OutreachTarget, RecommendedAction, PrecedentComp, MispricingFlag, BoardSummary, DealStructureWatch } from '../lib/types';
 
 function Section({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
@@ -23,6 +24,7 @@ function Section({ title, count, children }: { title: string; count?: number; ch
 
 export default function IssueDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [issue, setIssue] = useState<Issue | null>(null);
   const [signals, setSignals] = useState<BdSignal[]>([]);
@@ -90,21 +92,23 @@ export default function IssueDetailPage() {
             {issue.brief_type && <span className="capitalize">{issue.brief_type}</span>}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {issue.status === 'review' && (
-            <button onClick={() => navigate(`/review/${issue.id}`)} className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded-lg transition-colors">
-              Review & Import
+        {user && (
+          <div className="flex items-center gap-2">
+            {issue.status === 'review' && (
+              <button onClick={() => navigate(`/review/${issue.id}`)} className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded-lg transition-colors">
+                Review & Import
+              </button>
+            )}
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="flex items-center gap-1.5 px-3 py-2 text-slate-400 hover:text-red-400 hover:bg-red-900/20 border border-slate-700 hover:border-red-900 rounded-lg text-sm transition-colors disabled:opacity-40"
+            >
+              <Trash2 size={13} />
+              {deleting ? 'Deleting...' : 'Delete'}
             </button>
-          )}
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="flex items-center gap-1.5 px-3 py-2 text-slate-400 hover:text-red-400 hover:bg-red-900/20 border border-slate-700 hover:border-red-900 rounded-lg text-sm transition-colors disabled:opacity-40"
-          >
-            <Trash2 size={13} />
-            {deleting ? 'Deleting...' : 'Delete'}
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-auto p-6">
