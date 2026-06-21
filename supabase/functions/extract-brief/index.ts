@@ -60,8 +60,16 @@ ${SHARED_RULES}
 SECTION HIERARCHY -- FOLLOW STRICTLY:
 - Items under "TOP 3 ITEMS" or "TOP 3" or "FULL ANALYSIS" headings = HIGH priority bd_signals. Extract ALL of them.
 - Items under "SECOND TIER" or "SECOND-TIER" headings = MEDIUM priority bd_signals. Extract ALL of them.
-- Items under "WATCH LIST" or "WATCHLIST" or "MONITORING" headings = extract them as bd_signals BUT set strategic_category="watchlist" and priority="low". Do NOT elevate them to high/medium priority and do NOT treat them as Top 3 / Second Tier items. They must be preserved (not dropped) so they can be imported as watchlist rows.
-- An item labeled "reviewed, not elevated" is a watchlist item: include it with strategic_category="watchlist" and priority="low". Never give it high/medium priority.
+- Items under "WATCH LIST", "WATCH LIST -- REVIEWED, NOT ELEVATED", "Reviewed, not elevated", or "Not elevated" headings = extract them as bd_signals BUT keep them structurally contained:
+    * strategic_category = "watchlist"
+    * priority = "low"
+    * urgency = "low"
+    * bd_posture = "defensive" or "intelligence" (choose based on content; default "intelligence")
+    * review_status = "pending"
+    * Do NOT assign high fact_confidence unless the source text clearly supports it; otherwise leave fact_confidence empty or "low".
+  Never elevate them to high/medium priority and never treat them as Top 3 / Second Tier items. They must be preserved (not dropped) so they import as watchlist rows.
+- WATCH LIST CONTAINMENT: a watchlist item is for visibility only. Do NOT also emit it as a precedent_comp, recommended_internal_action, deal_structure_watch record, outreach_target, or mispricing_flag UNLESS that same item is independently and explicitly listed under that other section's heading. Example: "Takeda zasocitinib head-to-head psoriasis data" appearing only under WATCH LIST stays a low-priority watchlist bd_signal only -- it must not become a precedent comp, recommended action, or outreach target.
+- A watchlist item with no explicit source citation: leave sources empty. Do not fabricate a source.
 - When in doubt about priority: if an item has its own full analysis section with subsections (what_changed, bd_interpretation, etc.), treat it as high priority.
 
 DO NOT INVENT FIELDS:
@@ -82,7 +90,10 @@ SOURCE CHUNK TEXT RULES:
 - sources array: extract bracket citations like [FDA], [BMS], [Pfizer], [AbbVie] as source entries. These indicate the data source for that item.
 
 Additional rules for signals:
-- signal_type MUST be exactly one of: M&A, FDA approval, clinical data, regulatory, financing, appeal, partnership, deal structure, market signal, other. Use these exact strings (correct spacing/casing). NEVER output "acquisition" (use "M&A"), "licensing" (use "partnership" or "deal structure"), or "clinical_data" (use "clinical data"). If none fit, use "other".
+- signal_type MUST be exactly one of: M&A, FDA approval, clinical data, regulatory, financing, appeal, partnership, deal structure, market signal, other. Use these exact strings (correct spacing/casing). NEVER output "acquisition" (use "M&A"), "licensing"/"collaboration" (use "partnership"), "clinical_data" (use "clinical data"), "guidance" (use "regulatory"), or "mispricing" (use "market signal"). If none fit, use "other".
+- ASSETS vs MODALITY/CLASS: the assets array holds only NAMED drugs, products, trials, platforms, programs, or specific deal assets (e.g. navacaprant, KOASTAL-2, AMT-130, Utebzi, PIVOT-PO, prifemilast). Do NOT put broad drug classes or modalities in assets -- those go in modality_raw. Class/modality terms include: ADC, DAC, ASO, siRNA, PARP, KOR antagonist, PDE4 inhibitor, senior debt, synthetic royalty, multispecific antibody, TCE.
+- COMPANIES: do not drop an explicitly named company. If the raw text lists "Jazz, AbCellera" then both Jazz and AbCellera must appear in company_names_raw and companies_normalized. Known abbreviations (J&J, JNJ, BMS, GSK, Lilly, Merck, AZ, Roche, Sanofi, Takeda, Moderna) are companies, not drug names.
+- SOURCE LABELS: preserve source labels exactly as written (e.g. "JNJ.com", "AbCellera Investors", "Neumora Therapeutics, Inc.", "PR Newswire", "Endpoints News", "Select Committee on the CCP"). Do not rewrite them.
 - Do not extract deal-structure-watch, outreach-target, precedent-table, or mispricing-flag items unless they are explicitly written as BD signals.
 - For _raw and _normalized variants: _raw = exact text from document, _normalized = standardized form or empty.
 - modality_raw: only the exact modality text from the source. modality_normalized: only if clearly supported by document text.
@@ -146,6 +157,9 @@ const PROMPT_RECOMMENDED_ACTIONS = `You extract recommended internal actions fro
 
 ${SHARED_RULES}
 
+- ONLY extract global actions that are explicitly listed under a global action section: "Recommended Internal Actions", "Committee Action Queue", or "Slide 3 -- Recommended Internal Actions". If the source lists 3 such actions, return exactly 3.
+- Do NOT manufacture a global action from every Second Tier signal. A Second Tier item's "Action:" text belongs in that signal's recommended_action field, NOT here.
+- Do NOT create global actions from Watch List items.
 - "rationale" may be derived from the brief's analysis. But "owner" and "deadline" are factual fields: only populate them if the source EXPLICITLY names an owner or a deadline. Otherwise return "" -- never generate or guess an owner or deadline.
 
 Return this exact shape:
@@ -165,7 +179,8 @@ const PROMPT_DEAL_STRUCTURE = `You extract deal structure watch items and outrea
 
 ${SHARED_RULES}
 
-Outreach targets are category-based, not necessarily company-specific. Extract the target category, why it is timely, and what action is allowed.
+- deal_structure_watch: ONLY extract from explicit "Deal Structure Watch" content. Create exactly one record per distinct pressure point/item in that section -- do NOT split a single pressure point into multiple records, and do NOT convert Second Tier regulatory items or Watch List items into deal-structure records unless they appear under Deal Structure Watch.
+- outreach_targets: category-based, not necessarily company-specific. Extract the target category, why it is timely, and what action is allowed. Do NOT create outreach targets from Watch List items.
 
 Return this exact shape:
 {
@@ -194,6 +209,7 @@ ${SHARED_RULES}
 
 Extract only precedent-table / active-comp items explicitly present in the text.
 
+- ONLY create precedent_comps from rows explicitly listed under "PRECEDENT TABLE", "PRECEDENT TABLE -- ACTIVE COMPS THIS CYCLE", or "PRECEDENT COMPS". The number of precedent_comps MUST equal the number of rows in that explicit table. Do NOT add rows sourced from the Board summary, Top signals, Second Tier signals, Watch List signals, Deal Structure Watch, or Recommended Internal Actions unless that same deal is also a row in the explicit precedent table.
 - Preserve deal economics EXACTLY as written in deal_value and key_terms, including approximation marks (~), "up to" qualifiers, and distinct milestone vs. total figures. Do NOT round or merge values. Example: keep milestones "up to ~$1.03B" separate from a broader total "up-to-$1.14B".
 - Do NOT invent deal_value, stage_at_deal, modality, therapeutic_area, or deal_date. If not explicitly stated, return "".
 
@@ -666,6 +682,9 @@ const SIGNAL_TYPE_SYNONYMS: Record<string, string> = {
   "fda_approval": "FDA approval",
   "approval": "FDA approval",
   "regulatory_action": "regulatory",
+  "guidance": "regulatory",
+  "regulatory_guidance": "regulatory",
+  "mispricing": "market signal",
   "management": "other",
   "competitive": "market signal",
   "strategic_review": "other",
@@ -697,6 +716,13 @@ const ASSET_DENYLIST = new Set([
   "datroway", "hepcludex", "retatrutide", "voxzogo", "lytenava", "sac-tmt",
 ]);
 
+// Broad drug classes / modalities that must NOT be stored as named assets.
+const CLASS_MODALITY_TERMS = new Set([
+  "adc", "dac", "aso", "sirna", "parp", "kor antagonist", "pde4 inhibitor",
+  "senior debt", "synthetic royalty", "multispecific antibody", "tce",
+  "antibody-drug conjugate", "bispecific", "monoclonal antibody", "small molecule",
+]);
+
 const REGULATOR_NAMES = new Set([
   "fda", "u.s. food and drug administration", "ema", "european medicines agency",
   "mhra", "pmda", "health canada", "tga",
@@ -726,11 +752,18 @@ const COMPANY_ALIAS_MAP: Record<string, string[]> = {
   "ionis pharmaceuticals": ["ionis"],
 };
 
+// Known company names/abbreviations that are always valid (never flagged as hallucinated).
+const KNOWN_COMPANY_NAMES = new Set([
+  "bms", "gsk", "jnj", "j&j", "msd", "mck", "abbvie", "pfizer", "roche", "novartis",
+  "sanofi", "astrazeneca", "az", "amgen", "regeneron", "gilead", "biogen", "vertex",
+  "ionis", "immunogen", "bayer", "takeda", "daiichi", "eisai", "lilly", "merck", "moderna",
+]);
+
 function companyAppearsInSourceChunk(companyName: string, sourceChunk: string): boolean {
   if (!companyName) return false;
   const nameLower = companyName.toLowerCase().trim();
-  // Known pharma companies in alias map always pass validation
-  if (COMPANY_ALIAS_MAP[nameLower]) return true;
+  // Known pharma companies in alias map / known-names set always pass validation
+  if (COMPANY_ALIAS_MAP[nameLower] || KNOWN_COMPANY_NAMES.has(nameLower)) return true;
   if (!sourceChunk) return false;
   const chunkLower = sourceChunk.toLowerCase();
 
@@ -746,6 +779,16 @@ function companyAppearsInSourceChunk(companyName: string, sourceChunk: string): 
   }
 
   return false;
+}
+
+// Extracts the body text of a named source section (heading until the next heading/divider).
+function extractSectionText(fullText: string, headingPattern: RegExp): string {
+  const re = new RegExp(
+    `(?:^|\\n)#{0,3}\\s*(?:${headingPattern.source})[\\s\\S]*?(?=\\n#{1,3}\\s|\\n---|\\n\\*\\*\\*|$)`,
+    "i",
+  );
+  const m = fullText.match(re);
+  return m ? m[0].toLowerCase() : "";
 }
 
 function postProcessExtraction(raw: Record<string, unknown>, fullText: string): {
@@ -901,7 +944,24 @@ function postProcessExtraction(raw: Record<string, unknown>, fullText: string): 
 
       sig.company_names_raw = rawCompanies;
       sig.companies_normalized = normCompanies;
-      sig.assets = assets;
+      // Drop broad drug-class / modality terms from assets (assets must be named products only).
+      const classTermsInAssets: string[] = [];
+      const namedAssets = assets.filter((a: string) => {
+        if (CLASS_MODALITY_TERMS.has(String(a).toLowerCase().trim())) {
+          classTermsInAssets.push(a);
+          return false;
+        }
+        return true;
+      });
+      if (classTermsInAssets.length > 0) {
+        if (!sig.modality_raw) sig.modality_raw = classTermsInAssets[0];
+        warnings.push({
+          section: "bd_signals", index: i, field: "assets",
+          message: `Removed broad class/modality term(s) from assets: ${classTermsInAssets.join(", ")} (moved to modality)`,
+          severity: "info",
+        });
+      }
+      sig.assets = namedAssets;
 
       // --- Modality cleanup ---
       if (sig.modality !== undefined && sig.modality_raw === undefined) {
@@ -972,17 +1032,36 @@ function postProcessExtraction(raw: Record<string, unknown>, fullText: string): 
         }
       }
 
-      // --- Watchlist items: preserve but never elevated ---
+      // --- Watchlist items: preserve but keep structurally contained (never elevated) ---
       if (String(sig.strategic_category ?? "").toLowerCase() === "watchlist") {
         const pri = String(sig.priority ?? "").toLowerCase();
-        if (pri === "high" || pri === "medium") {
+        if (pri !== "low") {
           warnings.push({
             section: "bd_signals", index: i, field: "priority",
-            message: `Watchlist signal "${sig.headline}" had priority "${pri}"; demoted to "low" (watchlist items are not elevated)`,
+            message: `Watchlist signal "${sig.headline}" had priority "${pri || "(empty)"}"; set to "low" (watchlist items are not elevated)`,
             severity: "info",
           });
           sig.priority = "low";
         }
+        const urg = String(sig.urgency ?? "").toLowerCase();
+        if (urg !== "low") {
+          sig.urgency = "low";
+        }
+        // bd_posture must be defensive or intelligence for watchlist items
+        const posture = String(sig.bd_posture ?? "").toLowerCase();
+        if (posture !== "defensive" && posture !== "intelligence") {
+          sig.bd_posture = "intelligence";
+        }
+        // Do not assign high fact confidence to watchlist items unless source clearly supports it.
+        if (String(sig.fact_confidence ?? "").toLowerCase() === "high") {
+          warnings.push({
+            section: "bd_signals", index: i, field: "fact_confidence",
+            message: `Watchlist signal "${sig.headline}" had high fact_confidence; lowered to "low" (watchlist items are unverified)`,
+            severity: "info",
+          });
+          sig.fact_confidence = "low";
+        }
+        sig.review_status = "pending";
       }
 
       // --- Mispricing dedup ---
@@ -1011,6 +1090,64 @@ function postProcessExtraction(raw: Record<string, unknown>, fullText: string): 
     }
 
     data.bd_signals = signals;
+  }
+
+  // --- Watch List leakage containment ---
+  // Watchlist-only entities (companies/assets that appear ONLY in watchlist signals) must not
+  // generate related-table records unless they also appear in that table's explicit source section.
+  if (Array.isArray(data.bd_signals)) {
+    const sigList = data.bd_signals as Array<Record<string, unknown>>;
+    const entityTokens = (sig: Record<string, unknown>): string[] => [
+      ...((sig.company_names_raw as string[]) ?? []),
+      ...((sig.companies_normalized as string[]) ?? []),
+      ...((sig.assets as string[]) ?? []),
+    ].map(s => String(s).toLowerCase().trim()).filter(t => t.length >= 4);
+
+    const watchlistEntities = new Set<string>();
+    const nonWatchlistEntities = new Set<string>();
+    for (const sig of sigList) {
+      const isWatch = String(sig.strategic_category ?? "").toLowerCase() === "watchlist";
+      for (const tok of entityTokens(sig)) {
+        (isWatch ? watchlistEntities : nonWatchlistEntities).add(tok);
+      }
+    }
+    const watchlistOnly = [...watchlistEntities].filter(t => !nonWatchlistEntities.has(t));
+
+    if (watchlistOnly.length > 0) {
+      const sectionTexts: Record<string, string> = {
+        precedent_comps: extractSectionText(fullText, /precedent\s*(?:table|comps?)|active\s*comps/),
+        recommended_internal_actions: extractSectionText(fullText, /recommended\s*(?:internal\s*)?actions?|committee\s*action\s*queue|action\s*items?/),
+        deal_structure_watch: extractSectionText(fullText, /deal\s*structure\s*watch|deal\s*structure/),
+        outreach_targets: extractSectionText(fullText, /outreach\s*targets?/),
+        mispricing_flags: extractSectionText(fullText, /mispricing|valuation\s*(?:flags?|gaps?)/),
+      };
+
+      const recordText = (rec: Record<string, unknown>): string =>
+        Object.values(rec)
+          .map(v => Array.isArray(v) ? v.join(" ") : String(v ?? ""))
+          .join(" ")
+          .toLowerCase();
+
+      for (const tableKey of Object.keys(sectionTexts)) {
+        const arr = data[tableKey] as Array<Record<string, unknown>> | undefined;
+        if (!Array.isArray(arr) || arr.length === 0) continue;
+        const sectionText = sectionTexts[tableKey];
+        const kept = arr.filter((rec, idx) => {
+          const text = recordText(rec);
+          const leakedEntity = watchlistOnly.find(t => text.includes(t));
+          if (!leakedEntity) return true;
+          // Allowed if the same watchlist entity also appears in this table's explicit section.
+          if (sectionText && sectionText.includes(leakedEntity)) return true;
+          warnings.push({
+            section: tableKey, index: idx, field: "classification",
+            message: `Removed "${leakedEntity}" ${tableKey} record -- watchlist-only item leaked into related table (not present in its explicit source section)`,
+            severity: "info",
+          });
+          return false;
+        });
+        data[tableKey] = kept;
+      }
+    }
   }
 
   // --- Outreach targets legacy migration ---

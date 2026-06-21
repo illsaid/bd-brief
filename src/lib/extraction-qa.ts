@@ -66,6 +66,15 @@ const FIXTURE_COUNTS: Record<string, Record<string, { label: string; expected: n
     watchlist_items: { label: 'Watchlist items', expected: 4 },
     committee_action_queue: { label: 'Committee action queue', expected: 3 },
   },
+  'june_22_2026': {
+    top_signals: { label: 'Top items (high priority)', expected: 3 },
+    second_tier_signals: { label: 'Second-tier signals', expected: 4 },
+    watchlist_items: { label: 'Watchlist items', expected: 3 },
+    precedent_comps: { label: 'Precedent comps', expected: 5 },
+    mispricing_flags: { label: 'Mispricing flags', expected: 1 },
+    recommended_internal_actions: { label: 'Recommended internal actions', expected: 3 },
+    deal_structure_watch: { label: 'Deal structure watch', expected: 1 },
+  },
 };
 
 const LIKELY_ASSET_PATTERNS = /^[A-Z]{2,}[-\s]?\d|tide$|mab$|nib$|ib$|zumab$|ximab$|umab$|tinib$|ciclib$|parib$|ratide$|glutide$/i;
@@ -125,9 +134,9 @@ function companyAppearsInSource(companyName: string, sourceChunk: string): boole
 }
 
 const KNOWN_COMPANY_ABBREVIATIONS = new Set([
-  'bms', 'gsk', 'jnj', 'msd', 'mck', 'abbvie', 'pfizer', 'roche', 'novartis',
-  'sanofi', 'astrazeneca', 'amgen', 'regeneron', 'gilead', 'biogen', 'vertex',
-  'ionis', 'immunogen', 'bayer', 'takeda', 'daiichi', 'eisai',
+  'bms', 'gsk', 'jnj', 'j&j', 'msd', 'mck', 'abbvie', 'pfizer', 'roche', 'novartis',
+  'sanofi', 'astrazeneca', 'az', 'amgen', 'regeneron', 'gilead', 'biogen', 'vertex',
+  'ionis', 'immunogen', 'bayer', 'takeda', 'daiichi', 'eisai', 'lilly', 'merck', 'moderna',
 ]);
 
 function isLikelyAssetName(name: string): boolean {
@@ -330,6 +339,8 @@ export function computeQaWarnings(data: ExtractionJson, mode: QaMode = 'producti
       'vaccine', 'antiviral', 'monoclonal antibody', 'anti-vegf', 'oncology',
       'tnbc', 'hdv', 'namd', 'bispecific', 'car-t', 'cell therapy', 'gene therapy',
       'small molecule', 'biosimilar', 'checkpoint inhibitor', 'pd-1', 'pd-l1',
+      'dac', 'aso', 'sirna', 'parp', 'kor antagonist', 'pde4 inhibitor',
+      'senior debt', 'synthetic royalty', 'multispecific antibody', 'tce',
     ]);
     const thisSignalAssets = signalAssetSets[i] ?? new Set<string>();
     const headline = sig.headline ?? '';
@@ -356,11 +367,14 @@ export function computeQaWarnings(data: ExtractionJson, mode: QaMode = 'producti
       });
     }
 
-    // Missing source URL (info)
+    // Missing source URL (info; tailored + always non-blocking for watchlist items)
     if (!sig.sources || sig.sources.length === 0 || sig.sources.every(s => !s)) {
+      const isWatchlist = (sig.strategic_category ?? '').toLowerCase() === 'watchlist';
       warnings.push({
         section: 'bd_signals', index: i, field: 'sources',
-        message: `Signal "${sig.headline}" has no source references`,
+        message: isWatchlist
+          ? `Watch List item "${sig.headline}" has no explicit source in source document`
+          : `Signal "${sig.headline}" has no source references`,
         severity: 'info', badge: 'missing_source',
       });
     }
@@ -454,12 +468,16 @@ export function computeQaWarnings(data: ExtractionJson, mode: QaMode = 'producti
   const expectedCounts = fixtureId ? FIXTURE_COUNTS[fixtureId] : undefined;
 
   if (expectedCounts) {
-    const highPrioritySignals = (data.bd_signals ?? []).filter(s => s.priority === 'high').length;
-    const otherSignals = (data.bd_signals ?? []).length - highPrioritySignals;
+    const allSignals = data.bd_signals ?? [];
+    const isWatch = (s: ExtractionSignal) => (s.strategic_category ?? '').toLowerCase() === 'watchlist';
+    const watchlistSignals = allSignals.filter(isWatch).length;
+    const highPrioritySignals = allSignals.filter(s => !isWatch(s) && s.priority === 'high').length;
+    const secondTierSignals = allSignals.filter(s => !isWatch(s) && s.priority !== 'high').length;
 
     const countChecks: Array<{ key: string; actual: number }> = [
       { key: 'top_signals', actual: highPrioritySignals },
-      { key: 'second_tier_signals', actual: otherSignals },
+      { key: 'second_tier_signals', actual: secondTierSignals },
+      { key: 'watchlist_items', actual: watchlistSignals },
       { key: 'deal_structure_watch', actual: (data.deal_structure_watch ?? []).length },
       { key: 'outreach_targets', actual: (data.outreach_targets ?? []).length },
       { key: 'mispricing_flags', actual: (data.mispricing_flags ?? []).length },

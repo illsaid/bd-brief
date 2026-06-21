@@ -261,8 +261,9 @@ export default function UploadPage() {
       // Detect fixture briefs by content signatures
       const isMay26Fixture = rawText.includes('May 26') && rawText.includes('BD Brief') && rawText.includes('Datroway');
       const isMay31Fixture = rawText.includes('May 31') && rawText.includes('BD Brief') && rawText.includes('Decnupaz');
-      const isFixture = isMay26Fixture || isMay31Fixture;
-      const fixtureId = isMay26Fixture ? 'may_26_2026' : isMay31Fixture ? 'may_31_2026' : undefined;
+      const isJune22Fixture = rawText.includes('June 22') && rawText.includes('BD Brief');
+      const isFixture = isMay26Fixture || isMay31Fixture || isJune22Fixture;
+      const fixtureId = isMay26Fixture ? 'may_26_2026' : isMay31Fixture ? 'may_31_2026' : isJune22Fixture ? 'june_22_2026' : undefined;
       const extraction = {
         ...result.extraction,
         _qa_mode: isFixture ? 'test_fixture' : 'production',
