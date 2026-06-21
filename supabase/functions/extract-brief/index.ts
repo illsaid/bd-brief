@@ -1010,6 +1010,22 @@ function postProcessExtraction(raw: Record<string, unknown>, fullText: string): 
       });
 
       sig.company_names_raw = rawCompanies;
+      // --- Preserve explicitly named raw companies in normalized field ---
+      // Every validated raw company must appear in companies_normalized unless a retained
+      // normalized entry is a confirmed alias that already represents it.
+      const rawRepresented = (raw: string): boolean => {
+        const lower = raw.toLowerCase().trim();
+        if (normCompanies.some(n => n.toLowerCase().trim() === lower)) return true;
+        return normCompanies.some(n => {
+          const aliases = COMPANY_ALIAS_MAP[n.toLowerCase().trim()] ?? [];
+          return aliases.includes(lower);
+        });
+      };
+      for (const raw of rawCompanies) {
+        if (!rawRepresented(raw)) {
+          normCompanies.push(raw);
+        }
+      }
       sig.companies_normalized = normCompanies;
       // Drop broad drug-class / modality terms from assets (assets must be named products only).
       const classTermsInAssets: string[] = [];

@@ -256,6 +256,29 @@ export function computeQaWarnings(data: ExtractionJson, mode: QaMode = 'producti
       }
     }
 
+    // Dropped raw company (blocking): every explicitly named raw company must survive into
+    // normalized, unless a retained normalized entry is a confirmed alias representing it.
+    for (const rc of rawCompanies) {
+      if (!rc) continue;
+      const rcLower = rc.toLowerCase().trim();
+      const directMatch = normCompanies.some(nc => nc.toLowerCase().trim() === rcLower);
+      const aliasMatch = normCompanies.some(nc => {
+        const ncLower = nc.toLowerCase().trim();
+        const ncAliases = COMPANY_ALIASES[ncLower];
+        if (ncAliases && ncAliases.some(a => a.toLowerCase() === rcLower)) return true;
+        const rcAliases = COMPANY_ALIASES[rcLower];
+        if (rcAliases && rcAliases.some(a => a.toLowerCase() === ncLower)) return true;
+        return false;
+      });
+      if (!directMatch && !aliasMatch && normCompanies.length > 0) {
+        warnings.push({
+          section: 'bd_signals', index: i, field: 'companies_normalized',
+          message: `Normalized companies dropped explicitly named raw company: ${rc}`,
+          severity: 'blocking', badge: 'entity_confusion',
+        });
+      }
+    }
+
     // Inferred/hallucinated companies: company not in any signal text (blocking)
     // Build validation text from this signal's fields AND all signals' full text content
     const allSignalText = (data.bd_signals ?? [])
