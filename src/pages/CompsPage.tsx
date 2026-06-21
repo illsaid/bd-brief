@@ -3,21 +3,18 @@ import { Search, ChevronDown, ChevronUp, BarChart3 } from 'lucide-react';
 import { PageHeader } from '../components/Layout';
 import EmptyState from '../components/EmptyState';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
 import { PrecedentComp } from '../lib/types';
 
 export default function CompsPage() {
-  const { user } = useAuth();
   const [comps, setComps] = useState<PrecedentComp[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user) return;
-    supabase.from('precedent_comps').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
+    supabase.from('precedent_comps').select('*').order('created_at', { ascending: false })
       .then(({ data }) => { setComps((data ?? []) as PrecedentComp[]); setLoading(false); });
-  }, [user]);
+  }, []);
 
   const filtered = useMemo(() => comps.filter(c =>
     !search ||

@@ -4,21 +4,18 @@ import { Search, Building2 } from 'lucide-react';
 import { PageHeader } from '../components/Layout';
 import EmptyState from '../components/EmptyState';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
 import { Company } from '../lib/types';
 
 export default function CompaniesPage() {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    if (!user) return;
-    supabase.from('companies').select('*').eq('user_id', user.id).order('name')
+    supabase.from('companies').select('*').order('name')
       .then(({ data }) => { setCompanies((data ?? []) as Company[]); setLoading(false); });
-  }, [user]);
+  }, []);
 
   const filtered = companies.filter(c =>
     !search || c.name.toLowerCase().includes(search.toLowerCase()) ||

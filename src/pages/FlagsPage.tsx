@@ -4,11 +4,9 @@ import { PageHeader } from '../components/Layout';
 import { Badge, urgencyVariant } from '../components/Badge';
 import EmptyState from '../components/EmptyState';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
 import { MispricingFlag } from '../lib/types';
 
 export default function FlagsPage() {
-  const { user } = useAuth();
   const [flags, setFlags] = useState<MispricingFlag[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -16,10 +14,9 @@ export default function FlagsPage() {
   const [taFilter, setTaFilter] = useState('');
 
   useEffect(() => {
-    if (!user) return;
-    supabase.from('mispricing_flags').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
+    supabase.from('mispricing_flags').select('*').order('created_at', { ascending: false })
       .then(({ data }) => { setFlags((data ?? []) as MispricingFlag[]); setLoading(false); });
-  }, [user]);
+  }, []);
 
   const filtered = useMemo(() => flags.filter(f => {
     if (urgencyFilter && f.urgency !== urgencyFilter) return false;

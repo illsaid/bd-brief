@@ -4,7 +4,6 @@ import { Upload, Zap, FileText, AlertCircle, TrendingUp, Clock } from 'lucide-re
 import { PageHeader } from '../components/Layout';
 import { Badge, priorityVariant, confidenceVariant, statusVariant } from '../components/Badge';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
 import { Issue, BdSignal } from '../lib/types';
 
 interface Stats {
@@ -20,7 +19,6 @@ interface CountGroup {
 }
 
 export default function DashboardPage() {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState<Stats>({ totalIssues: 0, totalSignals: 0, needsReview: 0, thisWeek: 0 });
   const [recentIssues, setRecentIssues] = useState<Issue[]>([]);
@@ -31,11 +29,10 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
     const load = async () => {
       const [issuesRes, signalsRes] = await Promise.all([
-        supabase.from('issues').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(10),
-        supabase.from('bd_signals').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(10),
+        supabase.from('issues').select('*').order('created_at', { ascending: false }).limit(10),
+        supabase.from('bd_signals').select('*').order('created_at', { ascending: false }).limit(10),
       ]);
 
       const issues = (issuesRes.data ?? []) as Issue[];
@@ -45,16 +42,16 @@ export default function DashboardPage() {
       setRecentSignals(signals);
 
       // Count stats
-      const { count: totalIssues } = await supabase.from('issues').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
-      const { count: totalSignals } = await supabase.from('bd_signals').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
-      const { count: needsReview } = await supabase.from('bd_signals').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('needs_review', true);
+      const { count: totalIssues } = await supabase.from('issues').select('*', { count: 'exact', head: true });
+      const { count: totalSignals } = await supabase.from('bd_signals').select('*', { count: 'exact', head: true });
+      const { count: needsReview } = await supabase.from('bd_signals').select('*', { count: 'exact', head: true }).eq('needs_review', true);
       const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const { count: thisWeek } = await supabase.from('bd_signals').select('*', { count: 'exact', head: true }).eq('user_id', user.id).gte('created_at', weekAgo);
+      const { count: thisWeek } = await supabase.from('bd_signals').select('*', { count: 'exact', head: true }).gte('created_at', weekAgo);
 
       setStats({ totalIssues: totalIssues ?? 0, totalSignals: totalSignals ?? 0, needsReview: needsReview ?? 0, thisWeek: thisWeek ?? 0 });
 
       // Group by signal type, TA, priority from all signals
-      const { data: allSignals } = await supabase.from('bd_signals').select('signal_type, therapeutic_area, priority').eq('user_id', user.id);
+      const { data: allSignals } = await supabase.from('bd_signals').select('signal_type, therapeutic_area, priority');
 
       const typeCounts: Record<string, number> = {};
       const taCounts: Record<string, number> = {};
@@ -72,7 +69,7 @@ export default function DashboardPage() {
       setLoading(false);
     };
     load();
-  }, [user]);
+  }, []);
 
   const maxType = Math.max(...byType.map(x => x.count), 1);
   const maxTA = Math.max(...byTA.map(x => x.count), 1);

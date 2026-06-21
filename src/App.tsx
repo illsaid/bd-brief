@@ -24,28 +24,40 @@ function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route
-            path="/*"
+            path="/upload"
             element={
               <ProtectedRoute>
-                <Layout>
-                  <Routes>
-                    <Route path="/" element={<DashboardPage />} />
-                    <Route path="/upload" element={<UploadPage />} />
-                    <Route path="/review/:issueId" element={<ReviewPage />} />
-                    <Route path="/issues" element={<IssuesPage />} />
-                    <Route path="/issues/:id" element={<IssueDetailPage />} />
-                    <Route path="/signals" element={<SignalsPage />} />
-                    <Route path="/signals/:id" element={<SignalDetailPage />} />
-                    <Route path="/companies" element={<CompaniesPage />} />
-                    <Route path="/companies/:id" element={<CompanyDetailPage />} />
-                    <Route path="/assets" element={<AssetsPage />} />
-                    <Route path="/assets/:id" element={<AssetDetailPage />} />
-                    <Route path="/comps" element={<CompsPage />} />
-                    <Route path="/flags" element={<FlagsPage />} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </Layout>
+                <Layout><UploadPage /></Layout>
               </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/review/:issueId"
+            element={
+              <ProtectedRoute>
+                <Layout><ReviewPage /></Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/*"
+            element={
+              <Layout>
+                <Routes>
+                  <Route path="/" element={<DashboardPage />} />
+                  <Route path="/issues" element={<IssuesPage />} />
+                  <Route path="/issues/:id" element={<IssueDetailPage />} />
+                  <Route path="/signals" element={<SignalsPage />} />
+                  <Route path="/signals/:id" element={<SignalDetailPage />} />
+                  <Route path="/companies" element={<CompaniesPage />} />
+                  <Route path="/companies/:id" element={<CompanyDetailPage />} />
+                  <Route path="/assets" element={<AssetsPage />} />
+                  <Route path="/assets/:id" element={<AssetDetailPage />} />
+                  <Route path="/comps" element={<CompsPage />} />
+                  <Route path="/flags" element={<FlagsPage />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Layout>
             }
           />
         </Routes>

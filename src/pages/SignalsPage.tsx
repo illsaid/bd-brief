@@ -5,7 +5,6 @@ import { PageHeader } from '../components/Layout';
 import { Badge, priorityVariant, urgencyVariant, confidenceVariant } from '../components/Badge';
 import EmptyState from '../components/EmptyState';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
 import { BdSignal } from '../lib/types';
 import { Zap } from 'lucide-react';
 
@@ -42,7 +41,6 @@ function FilterSelect({ label, value, options, onChange }: { label: string; valu
 }
 
 export default function SignalsPage() {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const [signals, setSignals] = useState<BdSignal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,10 +49,9 @@ export default function SignalsPage() {
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
-    supabase.from('bd_signals').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
+    supabase.from('bd_signals').select('*').order('created_at', { ascending: false })
       .then(({ data }) => { setSignals((data ?? []) as BdSignal[]); setLoading(false); });
-  }, [user]);
+  }, []);
 
   const filtered = useMemo(() => signals.filter(s => {
     if (filters.priority && s.priority !== filters.priority) return false;

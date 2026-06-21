@@ -4,21 +4,18 @@ import { Search, FlaskConical } from 'lucide-react';
 import { PageHeader } from '../components/Layout';
 import EmptyState from '../components/EmptyState';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
 import { Asset } from '../lib/types';
 
 export default function AssetsPage() {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    if (!user) return;
-    supabase.from('assets').select('*, companies(name)').eq('user_id', user.id).order('name')
+    supabase.from('assets').select('*, companies(name)').order('name')
       .then(({ data }) => { setAssets((data ?? []) as Asset[]); setLoading(false); });
-  }, [user]);
+  }, []);
 
   const filtered = assets.filter(a =>
     !search || a.name.toLowerCase().includes(search.toLowerCase()) ||

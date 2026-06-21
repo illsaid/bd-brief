@@ -5,11 +5,9 @@ import { PageHeader } from '../components/Layout';
 import { Badge, statusVariant } from '../components/Badge';
 import EmptyState from '../components/EmptyState';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
 import { Issue } from '../lib/types';
 
 export default function IssuesPage() {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,10 +24,9 @@ export default function IssuesPage() {
   };
 
   useEffect(() => {
-    if (!user) return;
-    supabase.from('issues').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
+    supabase.from('issues').select('*').order('created_at', { ascending: false })
       .then(({ data }) => { setIssues((data ?? []) as Issue[]); setLoading(false); });
-  }, [user]);
+  }, []);
 
   const filtered = issues.filter(i =>
     !search || (i.title ?? '').toLowerCase().includes(search.toLowerCase()) ||

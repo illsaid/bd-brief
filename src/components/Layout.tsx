@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { ReactNode } from 'react';
 import {
   Activity, LayoutDashboard, Upload, Zap, FileText,
-  Building2, FlaskConical, BarChart3, AlertTriangle, LogOut, ChevronRight
+  Building2, FlaskConical, BarChart3, AlertTriangle, LogOut, LogIn, ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -11,11 +11,12 @@ interface NavItem {
   label: string;
   icon: typeof LayoutDashboard;
   end?: boolean;
+  authOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/upload', label: 'Upload Brief', icon: Upload },
+  { to: '/upload', label: 'Upload Brief', icon: Upload, authOnly: true },
   { to: '/issues', label: 'Issues', icon: FileText },
   { to: '/signals', label: 'BD Signals', icon: Zap },
   { to: '/companies', label: 'Companies', icon: Building2 },
@@ -32,6 +33,8 @@ export default function Layout({ children }: { children: ReactNode }) {
     await signOut();
     navigate('/login');
   };
+
+  const visibleNavItems = navItems.filter(item => !item.authOnly || user);
 
   return (
     <div className="flex h-screen bg-slate-950 overflow-hidden">
@@ -52,7 +55,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
         {/* Nav */}
         <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
-          {navItems.map(item => (
+          {visibleNavItems.map(item => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -78,14 +81,26 @@ export default function Layout({ children }: { children: ReactNode }) {
 
         {/* User */}
         <div className="px-2 py-3 border-t border-slate-800">
-          <div className="px-3 py-2 text-xs text-slate-500 truncate mb-1">{user?.email}</div>
-          <button
-            onClick={handleSignOut}
-            className="flex items-center gap-2.5 px-3 py-2 w-full rounded-lg text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
-          >
-            <LogOut size={15} className="text-slate-500" />
-            Sign out
-          </button>
+          {user ? (
+            <>
+              <div className="px-3 py-2 text-xs text-slate-500 truncate mb-1">{user.email}</div>
+              <button
+                onClick={handleSignOut}
+                className="flex items-center gap-2.5 px-3 py-2 w-full rounded-lg text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+              >
+                <LogOut size={15} className="text-slate-500" />
+                Sign out
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => navigate('/login')}
+              className="flex items-center gap-2.5 px-3 py-2 w-full rounded-lg text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+            >
+              <LogIn size={15} className="text-slate-500" />
+              Sign in
+            </button>
+          )}
         </div>
       </aside>
 
