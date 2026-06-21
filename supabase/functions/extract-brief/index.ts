@@ -392,6 +392,67 @@ function repairTruncatedJson(text: string): string {
   return result;
 }
 
+// Salvages the valid object elements of a named top-level array, skipping any malformed ones.
+// Used when a section's JSON is partially corrupt (e.g. one bad signal object) so a single
+// malformed element does not discard the entire extraction.
+function salvageArrayObjects(text: string, key: string): Record<string, unknown>[] | null {
+  const keyIdx = text.indexOf(`"${key}"`);
+  if (keyIdx === -1) return null;
+  const arrStart = text.indexOf("[", keyIdx);
+  if (arrStart === -1) return null;
+
+  const objects: Record<string, unknown>[] = [];
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  let objStart = -1;
+
+  for (let i = arrStart + 1; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === "{") {
+      if (depth === 0) objStart = i;
+      depth++;
+    } else if (ch === "}") {
+      depth--;
+      if (depth === 0 && objStart !== -1) {
+        const objStr = text.slice(objStart, i + 1);
+        try {
+          objects.push(JSON.parse(objStr));
+        } catch {
+          // skip malformed object, keep the rest
+        }
+        objStart = -1;
+      }
+    } else if (ch === "]" && depth === 0) {
+      break;
+    }
+  }
+  return objects.length > 0 ? objects : null;
+}
+
+// Parses a section's model output. Falls back to per-element salvage of the primary array
+// (when provided) if the whole-document parse fails.
+function parseSection(text: string, primaryArrayKey?: string): Record<string, unknown> {
+  try {
+    return JSON.parse(cleanJson(text));
+  } catch (err) {
+    if (primaryArrayKey) {
+      const salvaged = salvageArrayObjects(text, primaryArrayKey);
+      if (salvaged && salvaged.length > 0) {
+        return { [primaryArrayKey]: salvaged };
+      }
+    }
+    throw err;
+  }
+}
+
 // --- Section Splitter ---
 
 interface SectionChunks {
@@ -562,14 +623,15 @@ async function extractSection(
   text: string,
   timeoutMs: number,
   maxTokens: number,
-  sourceMode: SectionSourceMode
+  sourceMode: SectionSourceMode,
+  primaryArrayKey?: string
 ): Promise<SectionResult> {
   const start = Date.now();
   const userContent = `BRIEF TEXT:\n\n${text}\n\n---\n\nReturn ONLY valid JSON.`;
 
   try {
     const result = await callClaude(apiKey, HAIKU, prompt, userContent, timeoutMs, maxTokens);
-    const parsed = JSON.parse(cleanJson(result.text));
+    const parsed = parseSection(result.text, primaryArrayKey);
 
     return {
       data: parsed,
@@ -586,8 +648,8 @@ async function extractSection(
     console.log(`[extract-brief] ${sectionName} Haiku failed: ${haikuMsg}, trying Sonnet`);
 
     try {
-      const fallback = await callClaude(apiKey, SONNET, prompt, userContent, 60000, maxTokens);
-      const parsed = JSON.parse(cleanJson(fallback.text));
+      const fallback = await callClaude(apiKey, SONNET, prompt, userContent, 85000, maxTokens);
+      const parsed = parseSection(fallback.text, primaryArrayKey);
 
       return {
         data: parsed,
@@ -1388,20 +1450,21 @@ Deno.serve(async (req: Request) => {
       prompt: string;
       timeoutMs: number;
       maxTokens: number;
+      primaryArrayKey?: string;
     }[] = [
       { name: "metadata_and_summary", key: "metadata", prompt: PROMPT_METADATA, timeoutMs: 45000, maxTokens: 1500 },
-      { name: "bd_signals", key: "bd_signals", prompt: PROMPT_BD_SIGNALS, timeoutMs: 60000, maxTokens: 8000 },
-      { name: "leverage_resets", key: "leverage_resets", prompt: PROMPT_LEVERAGE_RESETS, timeoutMs: 45000, maxTokens: 2500 },
-      { name: "recommended_actions", key: "recommended_actions", prompt: PROMPT_RECOMMENDED_ACTIONS, timeoutMs: 45000, maxTokens: 2500 },
+      { name: "bd_signals", key: "bd_signals", prompt: PROMPT_BD_SIGNALS, timeoutMs: 60000, maxTokens: 12000, primaryArrayKey: "bd_signals" },
+      { name: "leverage_resets", key: "leverage_resets", prompt: PROMPT_LEVERAGE_RESETS, timeoutMs: 45000, maxTokens: 2500, primaryArrayKey: "leverage_resets" },
+      { name: "recommended_actions", key: "recommended_actions", prompt: PROMPT_RECOMMENDED_ACTIONS, timeoutMs: 45000, maxTokens: 2500, primaryArrayKey: "recommended_internal_actions" },
       { name: "deal_structure_and_outreach", key: "deal_structure", prompt: PROMPT_DEAL_STRUCTURE, timeoutMs: 45000, maxTokens: 2500 },
-      { name: "precedent_comps", key: "precedent_comps", prompt: PROMPT_PRECEDENT_COMPS, timeoutMs: 45000, maxTokens: 3500 },
-      { name: "mispricing_flags", key: "mispricing_flags", prompt: PROMPT_MISPRICING, timeoutMs: 45000, maxTokens: 2500 },
+      { name: "precedent_comps", key: "precedent_comps", prompt: PROMPT_PRECEDENT_COMPS, timeoutMs: 45000, maxTokens: 3500, primaryArrayKey: "precedent_comps" },
+      { name: "mispricing_flags", key: "mispricing_flags", prompt: PROMPT_MISPRICING, timeoutMs: 45000, maxTokens: 2500, primaryArrayKey: "mispricing_flags" },
     ];
 
     const extractionPromises = sectionConfigs.map((cfg) => {
       const sourceMode = getSourceMode(cfg.key, detected, chunks, body.text);
       const text = chunks[cfg.key];
-      return extractSection(apiKey, cfg.name, cfg.prompt, text, cfg.timeoutMs, cfg.maxTokens, sourceMode);
+      return extractSection(apiKey, cfg.name, cfg.prompt, text, cfg.timeoutMs, cfg.maxTokens, sourceMode, cfg.primaryArrayKey);
     });
 
     const results = await Promise.allSettled(extractionPromises);
